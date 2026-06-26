@@ -111,6 +111,7 @@ JWT_SECRET=super-secret-change-this
 
 KAFKA_BROKERS=localhost:9092
 KAFKA_CLIENT_ID=chat-backend
+REDIS_URL=localhost
 
 ```
 
