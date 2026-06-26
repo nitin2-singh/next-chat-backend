@@ -35,6 +35,7 @@ export async function createMessage(req: Request, res: Response) {
     },
     select: {
       id: true,
+      chatId: true,
       content: true,
       userId: true,
       createdAt: true,
@@ -53,8 +54,14 @@ export async function createMessage(req: Request, res: Response) {
     ],
   });
 
-  req.app.locals.io.to(chatId).emit("message:new", message);
+  // Emit to all members of the chat in their private user rooms
+  const members = await prisma.chatMember.findMany({
+    where: { chatId },
+  });
 
-  // 3. (Later) Produce Kafka event here
+  members.forEach((member) => {
+    req.app.locals.io.to(member.userId).emit("message:new", message);
+  });
+
   res.status(201).json(message);
 }

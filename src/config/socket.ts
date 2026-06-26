@@ -6,6 +6,7 @@ import {
   chatPresence,
   removeUserFromChat,
 } from "../util/precense";
+import { prisma } from "./prisma";
 
 export function setupSocket(server: http.Server) {
   const io = new Server(server, {
@@ -37,6 +38,9 @@ export function setupSocket(server: http.Server) {
 
     console.log("🟢 Socket connected:", socket.id, userId);
 
+    // Join user-specific private room for global real-time notifications
+    socket.join(userId);
+
     socket.on("join", (chatId: string) => {
       socket.join(chatId);
 
@@ -46,6 +50,13 @@ export function setupSocket(server: http.Server) {
       socket.to(chatId).emit("user:online", {
         userId,
         chatId,
+      });
+
+      // Send initial presence back to the client
+      const presence = chatPresence.get(chatId);
+      socket.emit("presence:sync", {
+        chatId,
+        onlineUserIds: presence ? Array.from(presence) : [],
       });
     });
 
@@ -75,8 +86,22 @@ export function setupSocket(server: http.Server) {
       console.log("🔴 Socket disconnected:", socket.id);
     });
 
-    socket.on("typing", ({ chatId }) => {
-      socket.to(chatId).emit("typing");
+    socket.on("typing", async ({ chatId }) => {
+      // Find other members of this chat to notify them in their private user rooms
+      try {
+        const members = await prisma.chatMember.findMany({
+          where: {
+            chatId,
+            userId: { not: userId },
+          },
+        });
+
+        members.forEach((member) => {
+          io.to(member.userId).emit("typing", { chatId, userId });
+        });
+      } catch (err) {
+        console.error("Typing socket broadcast error:", err);
+      }
     });
   });
 

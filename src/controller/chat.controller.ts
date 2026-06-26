@@ -9,6 +9,20 @@ export async function findCreateChat(req: Request, res: Response) {
     return res.status(400).json({ message: "Cannot chat with yourself" });
   }
 
+  const otherUser = await prisma.user.findUnique({
+    where: { id: otherUserId },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+    },
+  });
+
+  if (!otherUser) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
   const existingChat = await prisma.chat.findFirst({
     where: {
       AND: [
@@ -19,7 +33,7 @@ export async function findCreateChat(req: Request, res: Response) {
   });
 
   if (existingChat) {
-    return res.json({ chatId: existingChat.id });
+    return res.json({ chatId: existingChat.id, user: otherUser });
   }
 
   const chat = await prisma.chat.create({
@@ -30,7 +44,7 @@ export async function findCreateChat(req: Request, res: Response) {
     },
   });
 
-  res.status(201).json({ chatId: chat.id });
+  res.status(201).json({ chatId: chat.id, user: otherUser });
 }
 
 export async function getChat(req: Request, res: Response) {
@@ -62,18 +76,31 @@ export async function getChat(req: Request, res: Response) {
     },
   });
 
-  const result = chats.map((chat) => {
-    const otherUser = chat.members
-      .map((m) => m.user)
-      .find((u) => u.id !== userId)!;
+  const result = await Promise.all(
+    chats.map(async (chat) => {
+      const otherUser = chat.members
+        .map((m) => m.user)
+        .find((u) => u.id !== userId)!;
 
-    return {
-      chatId: chat.id,
-      user: otherUser,
-      lastMessage: chat.messages[0] ?? null,
-      updatedAt: chat.messages[0]?.createdAt ?? chat.createdAt,
-    };
-  });
+      const unreadCount = await prisma.message.count({
+        where: {
+          chatId: chat.id,
+          readAt: null,
+          userId: {
+            not: userId,
+          },
+        },
+      });
+
+      return {
+        chatId: chat.id,
+        user: otherUser,
+        lastMessage: chat.messages[0] ?? null,
+        updatedAt: chat.messages[0]?.createdAt ?? chat.createdAt,
+        unreadCount,
+      };
+    })
+  );
 
   res.json(result);
 }

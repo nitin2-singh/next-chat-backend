@@ -11,6 +11,6 @@ const router = Router();
 router.post("/", findCreateChat);
 router.get("/", getChat);
 router.get("/:id/messages", getChatMessages);
-router.get("/:id/read", readMessage);
+router.post("/:id/read", readMessage);
 
 export default router;
