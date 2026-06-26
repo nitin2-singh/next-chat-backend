@@ -1,12 +1,33 @@
-import { Kafka } from "kafkajs";
+import "dotenv/config";
+import fs from "fs";
+import path from "path";
+import { Kafka, logLevel } from "kafkajs";
+
+const ca = fs.readFileSync(path.join(process.cwd(), "./", "ca.pem"), "utf8");
 
 export const kafka = new Kafka({
-  clientId: "chat-backend",
-  brokers: ["localhost:9092"],
+  clientId: process.env.KAFKA_CLIENT_ID!,
+
+  brokers: [process.env.KAFKA_BROKERS!],
+
+  ssl: {
+    ca: [ca],
+  },
+
+  sasl: {
+    mechanism: "scram-sha-256",
+    username: process.env.KAFKA_USERNAME!,
+    password: process.env.KAFKA_PASSWORD!,
+  },
+
+  logLevel: logLevel.DEBUG,
 });
 
 export const producer = kafka.producer();
-export const consumer = kafka.consumer({ groupId: "chat-group" });
+
+export const consumer = kafka.consumer({
+  groupId: "chat-group",
+});
 
 // kafka-consumer.ts
 export async function startKafkaConsumer(io: any) {
